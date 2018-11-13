@@ -1,0 +1,38 @@
+Build AWS infrastructure hack session.txt
+
+- Create a terraform user
+
+docker run --rm -it -v "$(pwd)":/root/aws mbigras/utils
+cd aws
+read email
+lpass login $email
+mkdir ~/.aws
+lpass show --notes aws/root-credentials | awk 'BEGIN { print "[default]" } { print }' > ~/.aws/credentials
+aws iam get-user
+
+cat <<EOF > ~/.aws/config
+[default]
+region=us-west-1
+EOF
+
+aws iam list-users | jq -r '.Users[] | .UserName'
+aws iam list-groups | jq -r '.Groups[] | .GroupName'
+aws iam list-access-keys --user-name terraform
+
+user=terraform
+group=root
+
+aws iam create-user --user-name $user
+aws iam create-access-key --user-name $user \
+	| jq -r '.AccessKey | "aws_access_key_id=\(.AccessKeyId)\naws_secret_access_key=\(.SecretAccessKey)"' \
+	| awk -v user=$user 'BEGIN { print "[" user "]" } { print }' \
+	| tee -a ~/.aws/credentials
+aws iam add-user-to-group --group-name $group --user-name $user
+
+for key in $(aws iam list-access-keys --user-name $user | jq -r '.AccessKeyMetadata[] | .AccessKeyId'); do
+	aws iam delete-access-key --user-name $user --access-key-id $key
+done
+for group in $(aws iam list-groups-for-user --user-name $user | jq -r '.Groups[] | .GroupName'); do
+	aws iam remove-user-from-group --user-name $user --group-name $group
+done
+aws iam delete-user --user-name $user

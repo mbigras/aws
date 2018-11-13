@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+
+user=terraform
+group=root
+
+aws iam create-user --user-name $user
+aws iam create-access-key --user-name $user \
+	| jq -r '.AccessKey | "aws_access_key_id=\(.AccessKeyId)\naws_secret_access_key=\(.SecretAccessKey)"' \
+	| awk -v user=$user 'BEGIN { print "[" user "]" } { print }' \
+	| tee -a ~/.aws/credentials
+aws iam add-user-to-group --group-name $group --user-name $user
